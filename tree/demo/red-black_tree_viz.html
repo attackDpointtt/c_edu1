@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Red-Black Tree Visualizer</title>
+<style>
+  /* 整体：深色主题，因为红黑节点在深底上对比最清楚 */
+  :root {
+    --bg: #12161c;
+    --panel: #1a2029;
+    --line: #2c3542;
+    --text: #d8e0ea;
+    --dim: #8b98a9;
+    --red: #c0392b;
+    --red-stroke: #ff8f85;
+    --black: #232a34;
+    --black-stroke: #8894a6;
+    --ok: #3ddc84;
+    --bad: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { display: flex; flex-direction: column; height: 100vh; padding: 10px 14px 0; gap: 8px; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  header .sub { color: var(--dim); font-size: 12px; }
+  header code { color: #a8c7e8; }
+
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .group {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 9px;
+  }
+  button {
+    background: #263140; color: var(--text); border: 1px solid #34404f;
+    border-radius: 6px; padding: 5px 11px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: #2f3d4f; border-color: #45566a; }
+  button:disabled { opacity: .38; cursor: default; }
+  button.primary { background: #1d4f7c; border-color: #2d6f9e; }
+  button.primary:hover:not(:disabled) { background: #24628f; }
+  button.warn { background: #4a2a2a; border-color: #6b3a3a; }
+  button.warn:hover:not(:disabled) { background: #5b3434; }
+  button.step { min-width: 40px; font-family: Consolas, monospace; }
+  input[type=number], input[type=text] {
+    background: #10151b; color: var(--text); border: 1px solid #34404f;
+    border-radius: 6px; padding: 5px 8px; width: 76px; font: inherit; font-size: 13px;
+  }
+  input:focus { outline: 1px solid #4a7fb5; }
+  input[type=range] { width: 110px; }
+  label { color: var(--dim); font-size: 12px; display: flex; align-items: center; gap: 5px; }
+  label.chk { cursor: pointer; }
+
+  main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 10px; min-height: 0; }
+  .stage {
+    background: radial-gradient(ellipse at 50% 0%, #1b222c 0%, #141920 70%);
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-height: 0;
+  }
+  #canvas { display: block; width: 100%; height: 100%; }
+
+  .side { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .side h2 {
+    margin: 0; font-size: 12px; font-weight: 600; color: var(--dim);
+    text-transform: uppercase; letter-spacing: .6px;
+  }
+  .log {
+    flex: 1 1 auto; overflow-y: auto; background: #10151b; border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 8px; min-height: 120px;
+    font: 12px/1.5 Consolas, "Cascadia Mono", monospace;
+  }
+  .log .line { padding: 2px 0; border-bottom: 1px solid #1a212a; color: #9fb0c4; }
+  .log .line.cur { color: #ffffff; background: #1c2a3a; border-radius: 3px; padding-left: 4px; }
+  .log .line.plain { color: #cfe0f0; background: #16202b; border-left: 2px solid #3a5f85; padding-left: 6px; }
+  .legend {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 9px; flex: 0 0 auto;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px 10px;
+  }
+  .legend .row { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 2px 0; color: var(--dim); }
+  .legend .row:nth-child(4) { grid-column: 1 / span 2; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid; flex: none; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 7px 2px 9px;
+    font: 13px/1.4 Consolas, "Cascadia Mono", monospace; color: var(--dim);
+    display: flex; gap: 22px; flex-wrap: wrap; align-items: center;
+  }
+  footer b { color: var(--text); font-weight: 600; }
+  footer .ok { color: var(--ok); }
+  footer .bad { color: var(--bad); }
+  footer .mono { color: #9fb0c4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Red-Black Tree Visualizer</h1>
+    <span class="sub">interactive demo &mdash; same algorithm as <code>red-black_tree.c</code>, step by step</span>
+  </header>
+
+  <!-- ============ 操作区 ============ -->
+  <div class="bar">
+    <div class="group">
+      <label>key</label>
+      <input type="number" id="keyInput" value="25" min="0" max="999">
+      <button class="primary" id="btnInsert">Insert</button>
+      <button id="btnDelete">Delete</button>
+      <button id="btnSearch">Search</button>
+    </div>
+
+    <div class="group">
+      <button id="btnRand">Random insert</button>
+      <button id="btnAsc">Demo: 10 20 30 40 50 60</button>
+      <button id="btnStress">Stress test (200+200)</button>
+      <button class="warn" id="btnUndo" title="remove the frames of the last operation">Undo op</button>
+      <button class="warn" id="btnClear">Clear</button>
+    </div>
+
+    <div class="group">
+      <label>speed</label>
+      <input type="range" id="speed" min="0.5" max="6" step="0.5" value="2">
+      <span id="speedLabel" style="font-size:12px;color:var(--dim);width:34px">2x</span>
+      <label class="chk"><input type="checkbox" id="autoPlay" checked> auto-play</label>
+    </div>
+  </div>
+
+  <div class="bar">
+    <div class="group">
+      <button class="step" id="btnFirst" title="first frame (Home)">|&lt;</button>
+      <button class="step" id="btnPrev" title="previous step (Left)">&#9664;</button>
+      <button class="step primary" id="btnPlay" title="play / pause (Space)">&#9654; Play</button>
+      <button class="step" id="btnNext" title="next step (Right)">&#9654;|</button>
+      <button class="step" id="btnLast" title="last frame (End)">&gt;|</button>
+      <span id="progress" style="font-size:12px;color:var(--dim);margin-left:4px">frame 0 / 0</span>
+    </div>
+  </div>
+
+  <!-- ============ 画布 + 侧栏 ============ -->
+  <main>
+    <div class="stage"><svg id="canvas" preserveAspectRatio="xMidYMid meet"></svg></div>
+    <aside class="side">
+      <h2>Operation log</h2>
+      <div class="log" id="log"></div>
+      <h2>Legend</h2>
+      <div class="legend">
+        <div class="row"><span class="dot" style="background:var(--red);border-color:var(--red-stroke)"></span>RED node</div>
+        <div class="row"><span class="dot" style="background:var(--black);border-color:var(--black-stroke)"></span>BLACK node</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#ffd400"></span>current node (z / x)</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#4da3ff"></span>parent</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#2ecc71"></span>uncle</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#b07cff"></span>grandparent</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#ff9f1c"></span>sibling (w)</div>
+        <div class="row"><span class="dot" style="background:transparent;border-color:#ff4d4d"></span>double black / to be removed</div>
+      </div>
+    </aside>
+  </main>
+
+  <footer id="status"></footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+ *  红黑树可视化演示（单文件、零依赖）
+ * ----------------------------------------------------------------------------
+ *  本文件是 red-black_tree.c 的「图形版」，算法逐行对照移植：
+ *    insert / insertFixup（三种情况）、deleteNode / deleteFixup（四种情况）、
+ *    search、validateTree（五条性质 + BST 有序性 + parent 一致性）。
+ *  随机压力测试连随机数发生器（LCG）和洗牌顺序都与 C 版一致，
+ *  所以两边算出的树形、高度应当完全相同（200 个键 → 树高 9）。
+ *
+ *  【设计要点：先录制，再播放】
+ *  每个操作先跑完算法，把沿途每一个「值得看」的状态存成一帧（含整棵树的快照），
+ *  然后播放器才去渲染。好处是：树只在录制阶段被改动，播放阶段纯粹读快照，
+ *  于是「单步 / 回退 / 调速 / 跳到首尾」全都是免费的，也不会算错。
+ *
+ *  【渲染：SVG + rAF 补间】
+ *  节点元素按 id 复用，位置在每次换帧时由补间函数插值，
+ *  所以旋转看起来是「滑过去」的。边的端点直接读两端节点的当前位置，
+ *  不单独做动画，天然跟着节点走。
+ * ========================================================================== */
+
+/* =========================== 1. 常量与工具 =========================== */
+
+const RED = 'R', BLACK = 'B';
+
+const DX = 48;              /* 节点水平间距（列） */
+const DY = 72;              /* 层级间距 */
+const R  = 19;              /* 节点圆半径 */
+const TWEEN_BASE_MS = 420;  /* 单帧补间基准时长，实际时长 = 基准 / 速度倍率 */
+
+/* 各种高亮对应的描边色（与右侧图例一致） */
+const HL = {
+  focus:  { stroke: '#ffd400' },
+  parent: { stroke: '#4da3ff' },
+  uncle:  { stroke: '#2ecc71' },
+  gp:     { stroke: '#b07cff' },
+  sib:    { stroke: '#ff9f1c' },
+  double: { stroke: '#ff4d4d' },
+  danger: { stroke: '#ff4d4d' },
+  found:  { stroke: '#00e5ff' }
+};
+
+/* =========================== 2. 红黑树核心 ===========================
+ * 与 red-black_tree.c 一一对应。唯一区别：C 里用 Node **root 传根，
+ * 这里把根放在一个容器对象 T = { root } 里，方便函数内部直接替换根。
+ */
+
+let gNextId = 1;            /* 节点编号，用于让同一个节点在换帧时复用同一个 SVG 元素 */
+
+function createNode(key) {
+  return { id: gNextId++, key: key, color: RED, left: null, right: null, parent: null };
+}
+
+/* NULL 一律当黑色 —— 性质③「所有叶子都是黑色」的直接落地 */
+function colorOf(n) { return n === null ? BLACK : n.color; }
+function isRed(n)   { return colorOf(n) === RED; }
+
+/* ---------------------------- 旋转 ---------------------------- */
+/* ★ 红黑树比 AVL 多一个 parent，每次旋转必须同步维护它 ★ */
+
+function rotateLeft(T, x) {
+  const y = x.right;
+  if (y === null) return;                    /* 没有右孩子，转不动 */
+
+  x.right = y.left;                          /* ① y 的左子树 b 过继给 x */
+  if (y.left !== null) y.left.parent = x;
+
+  y.parent = x.parent;                       /* ② y 接过 x 的位置 */
+  if (x.parent === null) T.root = y;
+  else if (x === x.parent.left) x.parent.left = y;
+  else x.parent.right = y;
+
+  y.left = x;                                /* ③ x 降级为 y 的左孩子 */
+  x.parent = y;
+}
+
+function rotateRight(T, y) {
+  const x = y.left;
+  if (x === null) return;
+
+  y.left = x.right;
+  if (x.right !== null) x.right.parent = y;
+
+  x.parent = y.parent;
+  if (y.parent === null) T.root = x;
+  else if (y === y.parent.left) y.parent.left = x;
+  else y.parent.right = x;
+
+  x.right = y;
+  y.parent = x;
+}
+
+/* ---------------------------- 插入 ---------------------------- */
+
+function insert(T, key, trace) {
+  let parent = null, cur = T.root;
+
+  if (trace) rec('INSERT ' + key + '  --  step 1: BST search for the insertion slot', {});
+
+  while (cur !== null) {
+    parent = cur;
+    if (key < cur.key) {
+      if (trace) rec(key + ' < ' + cur.key + '  ->  go left', { focus: cur.id });
+      cur = cur.left;
+    } else if (key > cur.key) {
+      if (trace) rec(key + ' > ' + cur.key + '  ->  go right', { focus: cur.id });
+      cur = cur.right;
+    } else {
+      if (trace) rec(key + ' already exists -- nothing inserted (this demo keeps keys unique)', { focus: cur.id });
+      return false;
+    }
+  }
+
+  const z = createNode(key);                 /* 新节点默认 RED，见文件头说明 */
+  z.parent = parent;
+
+  if (parent === null) {
+    T.root = z;
+    if (trace) rec(key + ' becomes the root of an empty tree', { focus: z.id });
+  } else if (key < parent.key) {
+    parent.left = z;
+    if (trace) rec(key + ' attached as the LEFT child of ' + parent.key + '  (new nodes are always RED)',
+                   { focus: z.id, parent: parent.id });
+  } else {
+    parent.right = z;
+    if (trace) rec(key + ' attached as the RIGHT child of ' + parent.key + '  (new nodes are always RED)',
+                   { focus: z.id, parent: parent.id });
+  }
+
+  insertFixup(T, z, trace);
+  return true;
+}
+
+/* 插入修复：只看「父亲红不红」，红则分三种情况处理 */
+function insertFixup(T, z, trace) {
+  while (z.parent !== null && z.parent.color === RED) {
+    const p = z.parent, g = p.parent;
+
+    if (p === g.left) {
+      /* ---------------- 父亲是祖父的左孩子 ---------------- */
+      const u = g.right;
+
+      if (isRed(u)) {
+        /* 情况 1：叔叔红 → 父叔变黑、祖父变红，问题上移 */
+        p.color = BLACK; u.color = BLACK; g.color = RED;
+        if (trace) rec('CASE 1: uncle ' + u.key + ' is RED  ->  repaint parent ' + p.key +
+                       ' and uncle ' + u.key + ' BLACK, grandparent ' + g.key +
+                       ' RED; move up to ' + g.key + ' and re-check',
+                       { focus: g.id, parent: p.id, uncle: u.id });
+        z = g;
+      } else {
+        if (z === p.right) {
+          /* 情况 2：内侧（LR 形）→ 先绕父左旋，转成外侧 */
+          z = p;
+          rotateLeft(T, z);
+          if (trace) rec('CASE 2: uncle is BLACK and z is the INNER child (LR)  ->  rotate LEFT about ' +
+                         z.key + '; z is now on the outside, fall through to case 3',
+                         { focus: z.id, parent: z.parent.id, gp: z.parent.parent.id });
+        }
+        /* 情况 3：外侧（LL 形）→ 父变黑、祖父变红，再绕祖父右旋 */
+        const pz = z.parent, gz = z.parent.parent;
+        pz.color = BLACK; gz.color = RED;
+        if (trace) rec('CASE 3: uncle is BLACK and z is the OUTER child (LL)  ->  repaint parent ' +
+                       pz.key + ' BLACK and grandparent ' + gz.key + ' RED',
+                       { focus: z.id, parent: pz.id, gp: gz.id });
+        rotateRight(T, gz);
+        if (trace) rec('rotate RIGHT about ' + gz.key + '  ->  this subtree is balanced, the fix-up stops here',
+                       { focus: pz.id });
+      }
+    } else {
+      /* ---------------- 父亲是祖父的右孩子（完全镜像） ---------------- */
+      const u = g.left;
+
+      if (isRed(u)) {
+        p.color = BLACK; u.color = BLACK; g.color = RED;
+        if (trace) rec('CASE 1 (mirror): uncle ' + u.key + ' is RED  ->  repaint parent ' + p.key +
+                       ' and uncle ' + u.key + ' BLACK, grandparent ' + g.key +
+                       ' RED; move up to ' + g.key + ' and re-check',
+                       { focus: g.id, parent: p.id, uncle: u.id });
+        z = g;
+      } else {
+        if (z === p.left) {
+          z = p;
+          rotateRight(T, z);
+          if (trace) rec('CASE 2 (mirror, RL): uncle is BLACK and z is the INNER child  ->  rotate RIGHT about ' +
+                         z.key + '; z is now on the outside, fall through to case 3',
+                         { focus: z.id, parent: z.parent.id, gp: z.parent.parent.id });
+        }
+        const pz = z.parent, gz = z.parent.parent;
+        pz.color = BLACK; gz.color = RED;
+        if (trace) rec('CASE 3 (mirror): uncle is BLACK and z is the OUTER child  ->  repaint parent ' +
+                       pz.key + ' BLACK and grandparent ' + gz.key + ' RED',
+                       { focus: z.id, parent: pz.id, gp: gz.id });
+        rotateLeft(T, gz);
+        if (trace) rec('rotate LEFT about ' + gz.key + '  ->  this subtree is balanced, the fix-up stops here',
+                       { focus: pz.id });
+      }
+    }
+  }
+
+  if (T.root.color !== BLACK) {              /* 性质②：根永远是黑的 */
+    T.root.color = BLACK;
+    if (trace) rec('property 2: the root ' + T.root.key + ' is painted BLACK', { focus: T.root.id });
+  }
+}
+
+/* ---------------------------- 查找 ---------------------------- */
+
+function search(root, key) {
+  while (root !== null) {
+    if (key === root.key) return root;
+    root = key < root.key ? root.left : root.right;
+  }
+  return null;
+}
+
+function searchTrace(T, key, trace) {
+  let cur = T.root;
+  if (trace) rec('SEARCH ' + key + '  --  walk down like an ordinary BST', {});
+  while (cur !== null) {
+    if (key === cur.key) {
+      if (trace) rec('FOUND ' + key + '  (' + (cur.color === RED ? 'RED' : 'BLACK') + ' node)',
+                     { found: cur.id });
+      return cur;
+    }
+    const goLeft = key < cur.key;
+    if (trace) rec(key + ' ' + (goLeft ? '<' : '>') + ' ' + cur.key + '  ->  go ' +
+                   (goLeft ? 'left' : 'right'), { focus: cur.id });
+    cur = goLeft ? cur.left : cur.right;
+  }
+  if (trace) rec(key + ' not found -- the search fell off the tree', {});
+  return null;
+}
+
+/* ---------------------------- 删除 ---------------------------- */
+
+function minimum(node) {
+  if (node === null) return null;
+  while (node.left !== null) node = node.left;
+  return node;
+}
+
+/* 用 v 顶替 u 的位置（只改挂接，不碰颜色） */
+function transplant(T, u, v) {
+  if (u.parent === null) T.root = v;
+  else if (u === u.parent.left) u.parent.left = v;
+  else u.parent.right = v;
+  if (v !== null) v.parent = u.parent;
+}
+
+function deleteNode(T, key, trace) {
+  const z = search(T.root, key);
+  if (z === null) {
+    if (trace) rec('DELETE ' + key + ': key not found -- nothing to do', {});
+    return false;
+  }
+
+  if (trace) rec('DELETE ' + z.key + '  --  found it (' + (z.color === RED ? 'RED' : 'BLACK') +
+                 ' node, ' + ((z.left !== null) + (z.right !== null)) + ' child(ren))', { focus: z.id });
+
+  let y = z;
+  let removedColor = y.color;                /* 被真正摘走的节点的颜色：决定要不要修复 */
+  let x = null;                              /* 顶替 y 位置的节点 */
+  let xParent = null;                        /* x 的父节点（x 可能是 NULL，必须单独记） */
+
+  if (z.left === null) {
+    x = z.right; xParent = z.parent;
+    transplant(T, z, z.right);
+    if (trace) rec('the node has no left child  ->  its right subtree (or NULL) takes its place',
+                   { focus: z.id, danger: z.id });
+  } else if (z.right === null) {
+    x = z.left; xParent = z.parent;
+    transplant(T, z, z.left);
+    if (trace) rec('the node has no right child  ->  its left subtree takes its place',
+                   { focus: z.id, danger: z.id });
+  } else {
+    y = minimum(z.right);                    /* 中序后继 = 右子树最小值 */
+    removedColor = y.color;
+    x = y.right;
+    if (trace) rec('the node has two children  ->  use the in-order successor ' + y.key +
+                   ' (leftmost node of the right subtree) to take its place',
+                   { focus: z.id, found: y.id });
+
+    if (y.parent === z) {
+      xParent = y;
+      if (x !== null) x.parent = y;
+    } else {
+      xParent = y.parent;
+      transplant(T, y, y.right);
+      y.right = z.right;
+      y.right.parent = y;
+    }
+    transplant(T, z, y);
+    y.left = z.left;
+    y.left.parent = y;
+    y.color = z.color;                       /* 继承 z 的颜色 → 这棵子树的颜色账不变 */
+    if (trace) rec(y.key + ' moves up into the place of ' + z.key +
+                   ' and inherits its color (' + (z.color === RED ? 'RED' : 'BLACK') + ')',
+                   { focus: y.id });
+  }
+
+  if (trace) rec('the node actually removed is ' + (removedColor === RED ? 'RED' : 'BLACK') +
+                 (removedColor === BLACK
+                    ? '  ->  every path through it loses one black node, so property 5 is broken; fix up'
+                    : '  ->  the black-height is unchanged, no fix-up needed'),
+                 { danger: null });
+
+  if (removedColor === BLACK) deleteFixup(T, x, xParent, trace);
+  return true;
+}
+
+/* 删除修复：四种情况，x 是「双黑」负担的持有者 */
+function deleteFixup(T, x, xParent, trace) {
+  while (x !== T.root && colorOf(x) === BLACK) {
+    if (xParent === null) break;             /* 防御：正常不会发生 */
+
+    if (x === xParent.left) {
+      /* ---------------- x 是左孩子 ---------------- */
+      let w = xParent.right;
+      if (w === null) { x = xParent; xParent = x.parent; continue; }
+
+      if (colorOf(w) === RED) {
+        /* 情况 1：兄弟红 → 转成「兄弟黑」的三种情况之一 */
+        const wk = w.key, pk = xParent.key;
+        w.color = BLACK; xParent.color = RED;
+        rotateLeft(T, xParent);
+        w = xParent.right;
+        if (trace) rec('CASE 1: sibling w = ' + wk + ' is RED  ->  repaint w BLACK and parent ' + pk +
+                       ' RED, rotate LEFT about ' + pk + '; now the sibling is BLACK, re-examine',
+                       { sib: w ? w.id : null, double: x ? x.id : null });
+      }
+
+      if (colorOf(w.left) === BLACK && colorOf(w.right) === BLACK) {
+        /* 情况 2：兄弟黑且两孩子都黑 → 把双黑推给父亲 */
+        const wk = w.key, pk = xParent.key;
+        w.color = RED;
+        if (trace) rec('CASE 2: sibling ' + wk + ' is BLACK with two BLACK children  ->  repaint ' + wk +
+                       ' RED and push the extra black up to parent ' + pk,
+                       { sib: w.id, double: xParent.id });
+        x = xParent; xParent = x.parent;
+      } else {
+        if (colorOf(w.right) === BLACK) {
+          /* 情况 3：把内侧的红挪到外侧 */
+          const wk = w.key, ik = w.left.key;
+          w.left.color = BLACK; w.color = RED;
+          rotateRight(T, w);
+          w = xParent.right;
+          if (trace) rec('CASE 3: sibling ' + wk + ' is BLACK and its outer child is BLACK  ->  repaint its ' +
+                         'inner child ' + ik + ' BLACK and ' + wk + ' RED, rotate RIGHT about ' + wk,
+                         { sib: w.id, double: x ? x.id : null });
+        }
+        /* 情况 4：终结，一次旋转收拾干净 */
+        const wk = w.key, pk = xParent.key, ok = w.right.key;
+        w.color = xParent.color; xParent.color = BLACK; w.right.color = BLACK;
+        if (trace) rec('CASE 4: sibling ' + wk + ' is BLACK with a RED outer child ' + ok +
+                       '  ->  ' + wk + ' takes the color of parent ' + pk + ', and both ' + pk + ' and ' +
+                       ok + ' become BLACK', { sib: w.id, parent: xParent.id });
+        rotateLeft(T, xParent);
+        if (trace) rec('rotate LEFT about ' + pk + '  ->  the extra black is absorbed, the fix-up ends', {});
+        x = T.root; xParent = null;
+      }
+    } else {
+      /* ---------------- x 是右孩子（完全镜像） ---------------- */
+      let w = xParent.left;
+      if (w === null) { x = xParent; xParent = x.parent; continue; }
+
+      if (colorOf(w) === RED) {
+        const wk = w.key, pk = xParent.key;
+        w.color = BLACK; xParent.color = RED;
+        rotateRight(T, xParent);
+        w = xParent.left;
+        if (trace) rec('CASE 1 (mirror): sibling w = ' + wk + ' is RED  ->  repaint w BLACK and parent ' + pk +
+                       ' RED, rotate RIGHT about ' + pk + '; now the sibling is BLACK, re-examine',
+                       { sib: w ? w.id : null, double: x ? x.id : null });
+      }
+
+      if (colorOf(w.left) === BLACK && colorOf(w.right) === BLACK) {
+        const wk = w.key, pk = xParent.key;
+        w.color = RED;
+        if (trace) rec('CASE 2 (mirror): sibling ' + wk + ' is BLACK with two BLACK children  ->  repaint ' +
+                       wk + ' RED and push the extra black up to parent ' + pk,
+                       { sib: w.id, double: xParent.id });
+        x = xParent; xParent = x.parent;
+      } else {
+        if (colorOf(w.left) === BLACK) {
+          const wk = w.key, ik = w.right.key;
+          w.right.color = BLACK; w.color = RED;
+          rotateLeft(T, w);
+          w = xParent.left;
+          if (trace) rec('CASE 3 (mirror): sibling ' + wk + ' is BLACK and its outer child is BLACK  ->  ' +
+                         'repaint its inner child ' + ik + ' BLACK and ' + wk + ' RED, rotate LEFT about ' + wk,
+                         { sib: w.id, double: x ? x.id : null });
+        }
+        const wk = w.key, pk = xParent.key, ok = w.left.key;
+        w.color = xParent.color; xParent.color = BLACK; w.left.color = BLACK;
+        if (trace) rec('CASE 4 (mirror): sibling ' + wk + ' is BLACK with a RED outer child ' + ok +
+                       '  ->  ' + wk + ' takes the color of parent ' + pk + ', and both ' + pk +
+                       ' and ' + ok + ' become BLACK', { sib: w.id, parent: xParent.id });
+        rotateRight(T, xParent);
+        if (trace) rec('rotate RIGHT about ' + pk + '  ->  the extra black is absorbed, the fix-up ends', {});
+        x = T.root; xParent = null;
+      }
+    }
+  }
+
+  if (x !== null) x.color = BLACK;           /* 多余的黑色就地消化 */
+}
+
+/* ---------------------------- 校验 ---------------------------- */
+
+function blackHeight(node, ok) {
+  if (node === null) return 1;                                   /* NULL 算一个黑 */
+  if (isRed(node) && (isRed(node.left) || isRed(node.right))) ok.bad = true;   /* 性质④ */
+  const l = blackHeight(node.left, ok);
+  const r = blackHeight(node.right, ok);
+  if (l !== r) ok.bad = true;                                    /* 性质⑤ */
+  return l + (node.color === BLACK ? 1 : 0);
+}
+
+function inRange(node, lo, hi) {
+  if (node === null) return true;
+  if (node.key <= lo || node.key >= hi) return false;
+  return inRange(node.left, lo, node.key) && inRange(node.right, node.key, hi);
+}
+
+function parentsOK(node, expected) {
+  if (node === null) return true;
+  if (node.parent !== expected) return false;
+  return parentsOK(node.left, node) && parentsOK(node.right, node);
+}
+
+function validate(root) {
+  if (root === null) return true;
+  if (root.color !== BLACK) return false;                        /* 性质② */
+  if (root.parent !== null) return false;
+  const ok = { bad: false };
+  blackHeight(root, ok);
+  if (ok.bad) return false;
+  return inRange(root, -Infinity, Infinity) && parentsOK(root, null);
+}
+
+/* ---------------------------- 统计 ---------------------------- */
+
+function countNodes(root) { return root === null ? 0 : 1 + countNodes(root.left) + countNodes(root.right); }
+function height(root) {
+  if (root === null) return 0;
+  const l = height(root.left), r = height(root.right);
+  return (l > r ? l : r) + 1;
+}
+function keysInorder(root) {
+  const out = [];
+  (function w(n) { if (n === null) return; w(n.left); out.push(n.key); w(n.right); })(root);
+  return out;
+}
+function statsOf(root) {
+  return {
+    nodes: countNodes(root),
+    height: height(root),
+    bh: root === null ? 0 : blackHeight(root, { bad: false }) - 1,
+    valid: validate(root),
+    inorder: keysInorder(root).join(' ')
+  };
+}
+function inorderSorted(root, count) {
+  const buf = keysInorder(root);
+  if (buf.length !== count) return false;
+  for (let i = 1; i < buf.length; i++) if (buf[i - 1] >= buf[i]) return false;
+  return true;
+}
+
+/* ======================= 3. 快照、还原与录制 ======================= */
+
+/* 位置布局：中序序号定 x、深度定 y。二叉树用这个方案保证绝不重叠 */
+function snapshot(root) {
+  const pos = new Map();
+  let col = 0;
+  (function assign(n, d) {
+    if (n === null) return;
+    assign(n.left, d + 1);
+    pos.set(n.id, { x: col++, y: d });
+    assign(n.right, d + 1);
+  })(root, 0);
+
+  const nodes = [], edges = [];
+  (function walk(n) {
+    if (n === null) return;
+    const p = pos.get(n.id);
+    nodes.push({ id: n.id, key: n.key, color: n.color, x: p.x, y: p.y });
+    if (n.left !== null)  { edges.push({ a: n.id, b: n.left.id,  side: 'L' }); walk(n.left); }
+    if (n.right !== null) { edges.push({ a: n.id, b: n.right.id, side: 'R' }); walk(n.right); }
+  })(root);
+  return { nodes: nodes, edges: edges };
+}
+
+/* 从快照还原出一棵真实的树 —— 用于「回退到历史帧后又发起新操作」的情况 */
+function treeFromSnapshot(snap) {
+  const map = new Map();
+  for (const s of snap.nodes) {
+    map.set(s.id, { id: s.id, key: s.key, color: s.color, left: null, right: null, parent: null });
+  }
+  for (const e of snap.edges) {
+    const p = map.get(e.a), c = map.get(e.b);
+    if (!p || !c) continue;
+    c.parent = p;
+    if (e.side === 'L') p.left = c; else p.right = c;
+  }
+  let root = null;
+  for (const n of map.values()) if (n.parent === null) { root = n; break; }
+  return { root: root };
+}
+
+let T = { root: null };      /* 录制阶段被改动的「真实」树 */
+let frames = [];             /* 帧列表：每帧 = 一句说明 + 一份完整快照 + 统计 + 所属操作号 */
+let idx = -1;                /* 当前显示第几帧 */
+let recording = false;       /* 录制开关（压力测试时不录制，免得几百帧塞爆） */
+let opId = 0, curOp = 0;     /* 操作编号：同一操作的帧同号，Undo op 靠它找到边界 */
+
+/* 各角色的显示优先级：一个节点同时被多个角色指到时，显示优先级高的那个 */
+const HL_PRIORITY = { double: 7, danger: 6, focus: 5, found: 4, sib: 3, parent: 2, uncle: 2, gp: 2 };
+
+/* 录制时的调用写法是「角色 -> 节点 id」（如 { parent: 12 }），可读性好；
+ * 但渲染时需要反查「节点 id -> 角色」，所以存帧前统一翻转一次。 */
+function hlToMap(hl) {
+  const out = {};
+  if (!hl) return out;
+  for (const role in hl) {
+    const id = hl[role];
+    if (id === null || id === undefined) continue;
+    const old = out[id];
+    if (old === undefined || (HL_PRIORITY[role] || 0) > (HL_PRIORITY[old] || 0)) out[id] = role;
+  }
+  return out;
+}
+
+function rec(msg, hl) {
+  if (!recording) return;
+  frames.push({ msg: msg, hl: hlToMap(hl), snap: snapshot(T.root),
+                stats: statsOf(T.root), op: curOp });
+}
+
+/* ======================= 4. SVG 渲染与补间 ======================= */
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const stage = document.getElementById('canvas');
+const layerEdges = document.createElementNS(SVGNS, 'g');
+const layerNodes = document.createElementNS(SVGNS, 'g');
+stage.appendChild(layerEdges);
+stage.appendChild(layerNodes);
+
+const vnodes = new Map();    /* id   -> 节点视图对象 */
+const vedges = new Map();    /* "a>b" -> 边视图对象 */
+
+let vb = null, vbT = null, vbFrom = null;   /* viewBox 的当前值 / 目标值 / 起点值 */
+let twined = { t0: 0, dur: 0 };
+let speed = 2;
+
+function tweenDur() { return TWEEN_BASE_MS / speed; }
+
+/* 由快照算包围盒，再按画布长宽比补齐 —— 等价于「自动缩放到刚好铺满」 */
+function boxOf(snap, aspect) {
+  const m = R + 16;
+  let b;
+  if (snap.nodes.length === 0) {
+    b = { x: 0, y: 0, w: 320, h: 200 };
+  } else {
+    let minX = Infinity, maxX = -Infinity, maxY = 0;
+    for (const n of snap.nodes) {
+      if (n.x < minX) minX = n.x;
+      if (n.x > maxX) maxX = n.x;
+      if (n.y > maxY) maxY = n.y;
+    }
+    b = { x: minX * DX - m, y: -m, w: (maxX - minX) * DX + 2 * m, h: maxY * DY + 2 * m };
+  }
+  const minH = 300;                       /* 太小的话单节点会撑得巨大，给个下限 */
+  if (b.h < minH) { const d = (minH - b.h) / 2; b.y -= d; b.h = minH; }
+  if (b.w < b.h * aspect) { const nw = b.h * aspect; b.x -= (nw - b.w) / 2; b.w = nw; }
+  else { const nh = b.w / aspect; b.y -= (nh - b.h) / 2; b.h = nh; }
+  return b;
+}
+
+function stageAspect() {
+  const w = stage.clientWidth || 800, h = stage.clientHeight || 400;
+  return w / h;
+}
+
+function createNodeView(id, n) {
+  const g = document.createElementNS(SVGNS, 'g');
+  const ring = document.createElementNS(SVGNS, 'circle');
+  ring.setAttribute('r', R + 5);
+  ring.setAttribute('fill', 'none');
+  ring.setAttribute('stroke-width', '3');
+  ring.setAttribute('opacity', '0');
+  const circle = document.createElementNS(SVGNS, 'circle');
+  circle.setAttribute('r', R);
+  circle.setAttribute('stroke-width', '1.5');
+  const label = document.createElementNS(SVGNS, 'text');
+  label.setAttribute('text-anchor', 'middle');
+  label.setAttribute('dy', '5');
+  label.setAttribute('font-size', '14');
+  label.setAttribute('font-family', 'Consolas, monospace');
+  label.setAttribute('fill', '#ffffff');
+  const badge = document.createElementNS(SVGNS, 'text');   /* 双黑标记 */
+  badge.setAttribute('text-anchor', 'middle');
+  badge.setAttribute('x', '0');
+  badge.setAttribute('y', String(-R - 6));
+  badge.setAttribute('font-size', '11');
+  badge.setAttribute('font-family', 'Consolas, monospace');
+  badge.setAttribute('fill', '#ff4d4d');
+  badge.setAttribute('opacity', '0');
+  badge.textContent = 'DB';
+
+  g.appendChild(ring); g.appendChild(circle); g.appendChild(label); g.appendChild(badge);
+  layerNodes.appendChild(g);
+
+  const vn = {
+    key: n.key, color: n.color,
+    x: n.x, y: n.y, tx: n.x, ty: n.y,          /* 当前位置 / 目标位置（单位：列、层） */
+    alpha: 0, ta: 1, x0: n.x, y0: n.y, a0: 0,
+    hl: null, g: g, ring: ring, circle: circle, label: label, badge: badge
+  };
+  return vn;
+}
+
+function setFrame(f, animate) {
+  const snap = f.snap;
+  const seen = new Set();
+
+  /* ---- 节点：更新目标位置与颜色 ---- */
+  for (const s of snap.nodes) {
+    seen.add(s.id);
+    let vn = vnodes.get(s.id);
+    if (!vn) {
+      vn = createNodeView(s.id, s);
+      vnodes.set(s.id, vn);
+    }
+    vn.key = s.key;
+    vn.color = s.color;
+    vn.tx = s.x; vn.ty = s.y;
+    vn.ta = 1;
+    vn.hl = f.hl[s.id] || null;
+  }
+  /* 不在本帧里的节点：淡出 */
+  for (const [id, vn] of vnodes) {
+    if (!seen.has(id)) { vn.ta = 0; vn.hl = null; }
+  }
+
+  /* ---- 边 ---- */
+  const ekeys = new Set();
+  for (const e of snap.edges) {
+    const k = e.a + '>' + e.b;
+    ekeys.add(k);
+    let ed = vedges.get(k);
+    if (!ed) {
+      const line = document.createElementNS(SVGNS, 'line');
+      line.setAttribute('stroke', '#4a5769');
+      line.setAttribute('stroke-width', '1.6');
+      layerEdges.appendChild(line);
+      ed = { a: e.a, b: e.b, alpha: 0, ta: 1, a0: 0, el: line };
+      vedges.set(k, ed);
+    }
+    ed.ta = 1;
+  }
+  for (const [k, ed] of vedges) {
+    if (!ekeys.has(k)) ed.ta = 0;
+  }
+
+  /* ---- viewBox 目标 ---- */
+  const nv = boxOf(snap, stageAspect());
+  if (vb === null) { vb = nv; vbT = nv; vbFrom = nv; }
+  else vbT = nv;
+
+  /* ---- 启动补间 ---- */
+  twined.t0 = performance.now();
+  twined.dur = animate === false ? 0 : tweenDur();
+  vbFrom = { x: vb.x, y: vb.y, w: vb.w, h: vb.h };
+  for (const [id, vn] of vnodes) {
+    vn.x0 = vn.x; vn.y0 = vn.y; vn.a0 = vn.alpha;
+    /* 首次出现的节点（alpha 还是 0）从父节点位置冒出来 */
+    if (vn.alpha === 0 && !vn.spawned) {
+      vn.spawned = true;
+      const p = snap.edges.find(e => e.b === id);
+      if (p) {
+        const pv = vnodes.get(p.a);
+        if (pv) { vn.x = vn.x0 = pv.x; vn.y = vn.y0 = pv.y; }
+      }
+    }
+  }
+  for (const ed of vedges.values()) ed.a0 = ed.alpha;
+}
+
+function draw() {
+  for (const [id, n] of vnodes) {
+    n.g.setAttribute('transform', 'translate(' + (n.x * DX).toFixed(2) + ',' + (n.y * DY).toFixed(2) + ')');
+    n.g.setAttribute('opacity', n.alpha.toFixed(3));
+    n.circle.setAttribute('fill', n.color === RED ? '#c0392b' : '#232a34');
+    n.circle.setAttribute('stroke', n.color === RED ? '#ff8f85' : '#8894a6');
+    n.label.textContent = n.key;
+
+    if (n.hl && HL[n.hl]) {
+      n.ring.setAttribute('opacity', '1');
+      n.ring.setAttribute('stroke', HL[n.hl].stroke);
+      n.ring.setAttribute('stroke-dasharray', n.hl === 'double' ? '5 4' : '');
+    } else {
+      n.ring.setAttribute('opacity', '0');
+    }
+    n.badge.setAttribute('opacity', n.hl === 'double' ? '1' : '0');
+  }
+
+  for (const ed of vedges.values()) {
+    const a = vnodes.get(ed.a), b = vnodes.get(ed.b);
+    if (!a || !b) { ed.el.setAttribute('opacity', '0'); continue; }
+    const ax = a.x * DX, ay = a.y * DY, bx = b.x * DX, by = b.y * DY;
+    const dx = bx - ax, dy = by - ay;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const ux = dx / len, uy = dy / len;
+    ed.el.setAttribute('x1', (ax + ux * (R - 3)).toFixed(2));
+    ed.el.setAttribute('y1', (ay + uy * (R - 3)).toFixed(2));
+    ed.el.setAttribute('x2', (bx - ux * (R - 1)).toFixed(2));
+    ed.el.setAttribute('y2', (by - uy * (R - 1)).toFixed(2));
+    let al = ed.alpha;
+    if (a.alpha < al) al = a.alpha;
+    if (b.alpha < al) al = b.alpha;
+    ed.el.setAttribute('opacity', Math.max(0, al).toFixed(3));
+  }
+}
+
+function tick(now) {
+  const p = twined.dur <= 0 ? 1 : Math.min(1, (now - twined.t0) / twined.dur);
+  const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;   /* easeInOutQuad */
+
+  for (const [id, n] of vnodes) {
+    n.x = n.x0 + (n.tx - n.x0) * e;
+    n.y = n.y0 + (n.ty - n.y0) * e;
+    n.alpha = n.a0 + (n.ta - n.a0) * e;
+  }
+  for (const ed of vedges.values()) ed.alpha = ed.a0 + (ed.ta - ed.a0) * e;
+
+  if (vb && vbT && vbFrom) {
+    vb = {
+      x: vbFrom.x + (vbT.x - vbFrom.x) * e,
+      y: vbFrom.y + (vbT.y - vbFrom.y) * e,
+      w: vbFrom.w + (vbT.w - vbFrom.w) * e,
+      h: vbFrom.h + (vbT.h - vbFrom.h) * e
+    };
+    stage.setAttribute('viewBox', vb.x + ' ' + vb.y + ' ' + vb.w + ' ' + vb.h);
+  }
+
+  /* 淡出干净的节点/边：从 DOM 上摘掉 */
+  if (p >= 1) {
+    for (const [id, n] of Array.from(vnodes)) {
+      if (n.ta === 0 && n.alpha < 0.02) {
+        if (n.g.parentNode) n.g.parentNode.removeChild(n.g);
+        vnodes.delete(id);
+      }
+    }
+    for (const [k, ed] of Array.from(vedges)) {
+      if (ed.ta === 0 && ed.alpha < 0.02) {
+        if (ed.el.parentNode) ed.el.parentNode.removeChild(ed.el);
+        vedges.delete(k);
+      }
+    }
+  }
+
+  draw();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+function clearViews() {
+  vnodes.clear();
+  vedges.clear();
+  while (layerNodes.firstChild) layerNodes.removeChild(layerNodes.firstChild);
+  while (layerEdges.firstChild) layerEdges.removeChild(layerEdges.firstChild);
+  vb = null; vbT = null; vbFrom = null;
+}
+
+/* ======================= 5. 播放器 ======================= */
+
+const elLog = document.getElementById('log');
+const elStatus = document.getElementById('status');
+const elProgress = document.getElementById('progress');
+const elSpeed = document.getElementById('speed');
+const elSpeedLabel = document.getElementById('speedLabel');
+const elAuto = document.getElementById('autoPlay');
+
+let playing = false, playTimer = null;
+
+function show(i, animate) {
+  if (frames.length === 0) { idx = -1; renderLog(); renderStatus(); renderProgress(); updateButtons(); return; }
+  idx = Math.max(0, Math.min(frames.length - 1, i));
+  setFrame(frames[idx], animate !== false);
+  renderLog();
+  renderStatus();
+  renderProgress();
+  updateButtons();
+}
+
+function renderLog() {
+  let html = '';
+  for (let i = 0; i <= idx && i < frames.length; i++) {
+    const f = frames[i];
+    let cls = 'line';
+    if (i === idx) cls += ' cur';
+    if (f.plain) cls += ' plain';
+    html += '<div class="' + cls + '">' + (i + 1) + '. ' + escapeHtml(f.msg) + '</div>';
+  }
+  elLog.innerHTML = html;
+  elLog.scrollTop = elLog.scrollHeight;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+}
+
+function renderStatus() {
+  const s = (idx >= 0 && frames[idx]) ? frames[idx].stats : statsOf(null);
+  /* 注意：中间帧出现 NO 是正常的 —— 那时候性质刚被破坏、修复还没跑完。
+   * 每一个操作跑完后，valid 一定回到 YES。 */
+  elStatus.innerHTML =
+    'nodes: <b>' + s.nodes + '</b>' +
+    ' &nbsp;&nbsp; height: <b>' + s.height + '</b>' +
+    ' &nbsp;&nbsp; black-height: <b>' + s.bh + '</b>' +
+    ' &nbsp;&nbsp; valid RBT: <b class="' + (s.valid ? 'ok' : 'bad') + '">' + (s.valid ? 'YES' : 'NO') + '</b>' +
+    (s.valid ? '' : ' <span style="color:#8b98a9">(mid-operation: a property is broken and the fix-up has not run yet)</span>') +
+    ' &nbsp;&nbsp; inorder: <span class="mono">' + (s.inorder || '(empty)') + '</span>';
+}
+
+function renderProgress() {
+  elProgress.textContent = 'frame ' + (idx + 1) + ' / ' + frames.length;
+}
+
+function updateButtons() {
+  document.getElementById('btnPrev').disabled = idx <= 0;
+  document.getElementById('btnNext').disabled = idx >= frames.length - 1;
+  document.getElementById('btnFirst').disabled = idx <= 0;
+  document.getElementById('btnLast').disabled = idx >= frames.length - 1;
+  document.getElementById('btnPlay').textContent = playing ? '\u23F8 Pause' : '\u25B6 Play';
+}
+
+function stopPlay() {
+  playing = false;
+  if (playTimer) { clearTimeout(playTimer); playTimer = null; }
+  updateButtons();
+}
+
+function play() {
+  if (frames.length === 0) return;
+  if (idx >= frames.length - 1) show(0, false);      /* 已到末尾 → 从头再放 */
+  playing = true;
+  updateButtons();
+  loop();
+}
+
+function loop() {
+  if (!playing) return;
+  if (idx >= frames.length - 1) { stopPlay(); return; }
+  if (idx >= 0) show(idx + 1, true);
+  const delay = twined.dur + Math.max(60, 220 / speed);
+  playTimer = setTimeout(loop, delay);
+}
+
+/* ======================= 6. 操作的录制封装 ======================= */
+
+/* 开始一次新操作。
+ * 关键决定：新操作总是接在「最后一帧」的状态上，而不是眼睛当前看到的那一帧。
+ * 否则用户连点两次插入时，第一次的结果会被当成「历史分支」默默丢掉。
+ * 想真的回退一步，用专门的 Undo op 按钮。 */
+function beginOp() {
+  stopPlay();
+  T = frames.length > 0 ? treeFromSnapshot(frames[frames.length - 1].snap) : { root: null };
+  curOp = ++opId;
+  recording = true;
+  return frames.length;
+}
+
+function endOp(startIdx, label, note) {
+  recording = false;
+  const st = statsOf(T.root);
+  frames.push({
+    msg: label + ' complete -- nodes ' + st.nodes + ', height ' + st.height +
+         ', valid RBT: ' + (st.valid ? 'YES' : 'NO') + (note ? '  (' + note + ')' : ''),
+    hl: {}, snap: snapshot(T.root), stats: st, op: curOp
+  });
+  show(startIdx, false);
+  if (elAuto.checked && frames.length - startIdx > 1) play();
+  else show(frames.length - 1, false);
+}
+
+/* 撤销：把「最后一组操作」对应的帧整段删掉，并把树退回到那之前的状态 */
+function undoOp() {
+  stopPlay();
+  let maxOp = 0;
+  for (const f of frames) if (f.op && f.op > maxOp) maxOp = f.op;
+  if (maxOp === 0) return;                       /* 画面上只有「空树」日志，没什么可撤 */
+  let cut = frames.length;
+  for (let i = 0; i < frames.length; i++) {
+    if (frames[i].op === maxOp) { cut = i; break; }
+  }
+  frames.length = cut;
+  T = frames.length > 0 ? treeFromSnapshot(frames[frames.length - 1].snap) : { root: null };
+  show(frames.length - 1, false);
+}
+
+function doInsert(key) {
+  const start = beginOp();
+  insert(T, key, true);
+  endOp(start, 'INSERT ' + key);
+}
+
+function doDelete(key) {
+  const start = beginOp();
+  deleteNode(T, key, true);
+  endOp(start, 'DELETE ' + key);
+}
+
+function doSearch(key) {
+  const start = beginOp();
+  searchTrace(T, key, true);
+  endOp(start, 'SEARCH ' + key);
+}
+
+function doAscending() {
+  const keys = [10, 20, 30, 40, 50, 60];
+  const start = beginOp();
+  for (const k of keys) insert(T, k, true);
+  endOp(start, 'ASCENDING demo (10 20 30 40 50 60)',
+        'a plain BST would degenerate into a chain of height 6; the RBT stays balanced');
+}
+
+function doClear() {
+  stopPlay();
+  frames = []; idx = -1; recording = false; T = { root: null };
+  opId = 0; curOp = 0;
+  gNextId = 1;
+  clearViews();
+  recording = true;
+  rec('Tree cleared -- insert a key, or press "Demo" to replay the ascending example', {});
+  recording = false;
+  show(0, false);
+}
+
+function doRandomInsert() {
+  /* 取一个树上还没有的键，避免「已存在」这种没看头的路径 */
+  const exist = new Set(keysInorder(T.root));
+  let k = 0, guard = 0;
+  do { k = 1 + (nextRand() % 99); guard++; } while (exist.has(k) && guard < 500);
+  document.getElementById('keyInput').value = k;
+  doInsert(k);
+}
+
+/* ======================= 7. 随机压力测试（与 C 版完全同参） ======================= */
+
+let gSeed = 20260918;
+
+function nextRand() {
+  gSeed = (Math.imul(gSeed, 1103515245) + 12345) >>> 0;   /* Math.imul 取低 32 位，等价于 C 的无符号溢出 */
+  return (gSeed >>> 16) & 0x7FFF;
+}
+
+function shuffle(arr, n) {
+  for (let i = n - 1; i > 0; i--) {
+    const j = nextRand() % (i + 1);
+    const t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+  }
+}
+
+function stressRun() {
+  const N = 200;
+  const data = [];
+  for (let i = 0; i < N; i++) data[i] = i + 1;
+
+  gSeed = 20260918;                 /* 与 C 版同一个种子 */
+  const Ts = { root: null };
+  let steps = 0, pass = 0, fail = 0, sortedOK = true;
+
+  shuffle(data, N);
+  for (let i = 0; i < N; i++) {
+    insert(Ts, data[i], false);
+    steps++;
+    if (validate(Ts.root)) pass++; else fail++;
+    if (!inorderSorted(Ts.root, countNodes(Ts.root))) sortedOK = false;
+  }
+  const h1 = height(Ts.root);
+
+  shuffle(data, N);
+  for (let i = 0; i < N; i++) {
+    if (!deleteNode(Ts, data[i], false)) fail++;
+    steps++;
+    if (validate(Ts.root)) pass++; else fail++;
+    if (!inorderSorted(Ts.root, countNodes(Ts.root))) sortedOK = false;
+  }
+  for (let k = 1000; k < 1005; k++) {
+    if (deleteNode(Ts, k, false)) fail++;
+    if (validate(Ts.root)) pass++; else fail++;
+  }
+  return { steps: steps, pass: pass, fail: fail, sortedOK: sortedOK, heightAfterInserts: h1, remaining: countNodes(Ts.root) };
+}
+
+function doStress() {
+  stopPlay();
+  if (idx < 0) {   /* 画布上什么也没有时，先垫一帧空树，免得日志没地方挂 */
+    frames.push({ msg: '(empty tree)', hl: {}, snap: { nodes: [], edges: [] }, stats: statsOf(null) });
+    idx = 0; show(0, false);
+  }
+  const keepSnap = frames[idx].snap;
+  const keepStats = frames[idx].stats;
+
+  const r = stressRun();
+  const lines = [
+    '=== Stress test: 200 random inserts + 200 random deletes (same seed as red-black_tree.c) ===',
+    'inserted 1..200 in shuffled order  ->  nodes ' + 200 + ', height ' + r.heightAfterInserts +
+      '   (theoretical bound 2*log2(n+1) ~= 15; a plain BST could reach 200)',
+    'then deleted all 200 keys in shuffled order, plus 5 keys that never existed',
+    'operations validated : ' + r.steps,
+    'property check PASS  : ' + r.pass,
+    'property check FAIL  : ' + r.fail,
+    'inorder always sorted: ' + (r.sortedOK ? 'YES' : 'NO'),
+    'remaining nodes      : ' + r.remaining,
+    '=== end of stress test (the tree on the left is unchanged) ==='
+  ];
+  for (const l of lines) {
+    frames.push({ msg: l, hl: {}, snap: keepSnap, stats: keepStats, plain: true });
+  }
+  show(frames.length - 1, false);
+  stopPlay();
+}
+
+/* ======================= 8. UI 绑定 ======================= */
+
+function keyVal() {
+  const v = parseInt(document.getElementById('keyInput').value, 10);
+  return Number.isFinite(v) ? v : 0;
+}
+
+document.getElementById('btnInsert').onclick = () => doInsert(keyVal());
+document.getElementById('btnDelete').onclick = () => doDelete(keyVal());
+document.getElementById('btnSearch').onclick = () => doSearch(keyVal());
+document.getElementById('btnRand').onclick = doRandomInsert;
+document.getElementById('btnAsc').onclick = doAscending;
+document.getElementById('btnStress').onclick = doStress;
+document.getElementById('btnUndo').onclick = undoOp;
+document.getElementById('btnClear').onclick = doClear;
+
+document.getElementById('btnFirst').onclick = () => { stopPlay(); show(0, false); };
+document.getElementById('btnPrev').onclick  = () => { stopPlay(); show(idx - 1, true); };
+document.getElementById('btnNext').onclick  = () => { stopPlay(); show(idx + 1, true); };
+document.getElementById('btnLast').onclick  = () => { stopPlay(); show(frames.length - 1, false); };
+document.getElementById('btnPlay').onclick  = () => { playing ? stopPlay() : play(); };
+
+elSpeed.oninput = () => {
+  speed = parseFloat(elSpeed.value);
+  elSpeedLabel.textContent = speed + 'x';
+};
+document.getElementById('keyInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doInsert(keyVal());
+});
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.key !== ' ') return;
+  if (e.key === ' ')          { e.preventDefault(); playing ? stopPlay() : play(); }
+  else if (e.key === 'ArrowRight') { stopPlay(); show(idx + 1, true); }
+  else if (e.key === 'ArrowLeft')  { stopPlay(); show(idx - 1, true); }
+  else if (e.key === 'Home')  { stopPlay(); show(0, false); }
+  else if (e.key === 'End')   { stopPlay(); show(frames.length - 1, false); }
+});
+
+window.addEventListener('resize', () => {
+  if (idx >= 0 && frames[idx]) {
+    const nv = boxOf(frames[idx].snap, stageAspect());
+    vbT = nv; vbFrom = { x: vb.x, y: vb.y, w: vb.w, h: vb.h };
+    twined.t0 = performance.now(); twined.dur = 0;
+  }
+});
+
+/* ======================= 9. 对外自检接口 =======================
+ * 给「用脚本验证这个演示是否正确」留的钩子：
+ *   RBTViz.stress()  跑一遍 200+200 压力测试，返回统计（不碰 UI）
+ *   RBTViz.state()   当前显示帧的统计
+ * 期望：fail === 0，且 heightAfterInserts === 9（与 C 版同一随机序列 → 同一棵树）
+ */
+window.RBTViz = {
+  stress: function () { return stressRun(); },
+  state: function () { return statsOf(T.root); },
+  validate: function () { return validate(T.root); },
+  frameCount: function () { return frames.length; },
+  goTo: function (i) { show(i, false); return idx; },
+  undo: function () { undoOp(); return idx; },
+  hasOpToUndo: function () { for (const f of frames) if (f.op > 0) return true; return false; }
+};
+
+/* ======================= 10. 起始演示 ======================= */
+
+doAscending();
+show(0, false);
+play();
+</script>
+</body>
+</html>
