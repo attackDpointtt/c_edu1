@@ -1,0 +1,179 @@
+===========================================================
+  4-order B-tree demo (max 3 keys per node, min 1 for non-root)
+===========================================================
+
+[INSERT] inserting in order: 10 20 5 6 12 30 7 17 3 25 
+
+-------- after inserting 10 --------
+[10]   <- leaf
+Total keys: 1    Height: 1    Root keys: 1
+Inorder: 10 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 20 --------
+[10 20]   <- leaf
+Total keys: 2    Height: 1    Root keys: 2
+Inorder: 10 20 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 5 --------
+[5 10 20]   <- leaf
+Total keys: 3    Height: 1    Root keys: 3
+Inorder: 5 10 20 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 6 --------
+[10]
+        [5 6]   <- leaf
+        [20]   <- leaf
+Total keys: 4    Height: 2    Root keys: 1
+Inorder: 5 6 10 20 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 12 --------
+[10]
+        [5 6]   <- leaf
+        [12 20]   <- leaf
+Total keys: 5    Height: 2    Root keys: 1
+Inorder: 5 6 10 12 20 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 30 --------
+[10]
+        [5 6]   <- leaf
+        [12 20 30]   <- leaf
+Total keys: 6    Height: 2    Root keys: 1
+Inorder: 5 6 10 12 20 30 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 7 --------
+[10]
+        [5 6 7]   <- leaf
+        [12 20 30]   <- leaf
+Total keys: 7    Height: 2    Root keys: 1
+Inorder: 5 6 7 10 12 20 30 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 17 --------
+[10 20]
+        [5 6 7]   <- leaf
+        [12 17]   <- leaf
+        [30]   <- leaf
+Total keys: 8    Height: 2    Root keys: 2
+Inorder: 5 6 7 10 12 17 20 30 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 3 --------
+[6 10 20]
+        [3 5]   <- leaf
+        [7]   <- leaf
+        [12 17]   <- leaf
+        [30]   <- leaf
+Total keys: 9    Height: 2    Root keys: 3
+Inorder: 3 5 6 7 10 12 17 20 30 
+B-tree property check (5 rules): PASS
+
+-------- after inserting 25 --------
+[10]
+        [6]
+                [3 5]   <- leaf
+                [7]   <- leaf
+        [20]
+                [12 17]   <- leaf
+                [25 30]   <- leaf
+Total keys: 10    Height: 3    Root keys: 1
+Inorder: 3 5 6 7 10 12 17 20 25 30 
+B-tree property check (5 rules): PASS
+
+[SELF CHECK after all inserts]
+  [ok]   key count                            = 10
+  [ok]   height                               = 3
+  [ok  ] all 5 properties hold                = yes
+  [ok  ] inorder is ascending                 = yes
+  [ok]   every inserted key is findable       = 10
+  [ok  ] searching a missing key fails        = no
+
+[SEARCH]
+   6 -> found in node [6] at index 0 (0-based)
+  15 -> not found
+  30 -> found in node [25 30] at index 1 (0-based)
+  99 -> not found
+
+[DELETE] deleting in order: 1 12 17 10 5 20 
+(exercises borrow from predecessor/successor, node merge, and tree shrink)
+
+Key 1 is not in the tree
+-------- after deleting 1 --------
+[10]
+        [6]
+                [3 5]   <- leaf
+                [7]   <- leaf
+        [20]
+                [12 17]   <- leaf
+                [25 30]   <- leaf
+Total keys: 10    Height: 3    Root keys: 1
+Inorder: 3 5 6 7 10 12 17 20 25 30 
+B-tree property check (5 rules): PASS
+
+-------- after deleting 12 --------
+[6 10 20]
+        [3 5]   <- leaf
+        [7]   <- leaf
+        [17]   <- leaf
+        [25 30]   <- leaf
+Total keys: 9    Height: 2    Root keys: 3
+Inorder: 3 5 6 7 10 17 20 25 30 
+B-tree property check (5 rules): PASS
+
+-------- after deleting 17 --------
+[6 10 25]
+        [3 5]   <- leaf
+        [7]   <- leaf
+        [20]   <- leaf
+        [30]   <- leaf
+Total keys: 8    Height: 2    Root keys: 3
+Inorder: 3 5 6 7 10 20 25 30 
+B-tree property check (5 rules): PASS
+
+-------- after deleting 10 --------
+[6 25]
+        [3 5]   <- leaf
+        [7 20]   <- leaf
+        [30]   <- leaf
+Total keys: 7    Height: 2    Root keys: 2
+Inorder: 3 5 6 7 20 25 30 
+B-tree property check (5 rules): PASS
+
+-------- after deleting 5 --------
+[6 25]
+        [3]   <- leaf
+        [7 20]   <- leaf
+        [30]   <- leaf
+Total keys: 6    Height: 2    Root keys: 2
+Inorder: 3 6 7 20 25 30 
+B-tree property check (5 rules): PASS
+
+-------- after deleting 20 --------
+[6 25]
+        [3]   <- leaf
+        [7]   <- leaf
+        [30]   <- leaf
+Total keys: 5    Height: 2    Root keys: 2
+Inorder: 3 6 7 25 30 
+B-tree property check (5 rules): PASS
+
+[SELF CHECK after all deletes]
+  [ok]   remaining key count                  = 5
+  [ok]   height                               = 2
+  [ok  ] all 5 properties still hold          = yes
+  [ok  ] inorder is still ascending           = yes
+  [ok  ] deleted key 12 is gone               = no
+  [ok  ] deleted key 20 is gone               = no
+  [ok  ] deleted key 1 is gone                = no
+  [ok  ] remaining key 25 is there            = yes
+  [ok  ] remaining key 3 is there             = yes
+
+  result: 31 passed, 0 failed
+
+[FREE]
+The whole tree has been freed
